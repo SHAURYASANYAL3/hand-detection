@@ -38,8 +38,7 @@ It overlays a futuristic **heads-up display (HUD)** and animated visual effects 
 
 ## 📷 Demo Screenshot
 
-![Cool Hand HUD Demo](demo.png)  
-*(Replace with an actual screenshot of your app)*  
+![Cool Hand HUD Demo](image.png)  
 
 ---
 
