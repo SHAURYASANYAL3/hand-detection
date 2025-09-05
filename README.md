@@ -57,5 +57,5 @@ It overlays a futuristic **heads-up display (HUD)** and animated visual effects 
 - Dark/Light theme toggle.  
 
 ---
-
+This project is inspired by **[cool-hand-art](https://github.com/developerrahulofficial/cool-hand-art)** by developerrahulofficial
 ⭐ If you like this project, give it a **star** on GitHub!  
