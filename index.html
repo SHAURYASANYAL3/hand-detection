@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
+	<title>Cool Hand HUD</title>
+
+	<!-- Bootstrap 5 -->
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+	<link rel="icon" type="image/png" href="favicon.png">
+	<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+	<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+	<link rel="manifest" href="site.webmanifest">
+
+<!-- hehe made by shaurya sanyal -->
+	<style>
+		:root{
+			--bg:#0b1220;
+			--panel:#0f1724;
+			--accent:#6178ff;
+			--accent-2:#ff6a3d;
+			--glass: rgba(255,255,255,0.04);
+		}
+		html,body{height:100%; background: radial-gradient(1200px 600px at 10% 10%, rgba(97,120,255,0.06), transparent), radial-gradient(900px 400px at 95% 85%, rgba(255,106,61,0.03), transparent), var(--bg); color:#e6eef8; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+		.app-container{max-width:1200px; margin:30px auto;}
+		.video-card{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border:1px solid rgba(255,255,255,0.04); border-radius:12px; padding:10px;}
+		.preview-wrap{position:relative; width:100%; aspect-ratio:4/3; overflow:hidden; border-radius:8px; background:#000; display:flex; align-items:center; justify-content:center;}
+		video#webcam{width:100%; height:100%; object-fit:cover; transform: scaleX(-1); /* mirror */ display:block;}
+		canvas#overlay{position:absolute; left:0; top:0; transform:scaleX(-1); /* mirror the canvas too */ pointer-events:none; width:100%; height:100%;}
+		.controls .form-select, .controls .btn {border-radius:8px;}
+		.hud-badge{background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#071025; font-weight:600; border-radius:999px; padding:6px 10px; box-shadow:0 6px 18px rgba(97,120,255,0.12);}
+		.muted{opacity:0.7; font-size:0.9rem;}
+		.card-panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03);}
+		footer{opacity:0.6; font-size:0.85rem;}
+		.small-muted{font-size:0.82rem; color:rgba(230,238,248,0.7);}
+		.status-dot{display:inline-block; width:10px; height:10px; border-radius:50%;}
+		.status-on{background: #22c55e;}
+		.status-off{background: #ef4444;}
+		.control-row > * {margin-bottom:8px;}
+		/* Responsive tweaks */
+		@media (max-width: 768px){
+			.preview-wrap{aspect-ratio:3/4;}
+		}
+	</style>
+</head>// hehe made by shaurya sanyal
+<body>
+	<div class="container app-container">
+		<div class="d-flex justify-content-between align-items-center mb-3">
+			<div>
+				<h3 class="mb-0">Cool Hand HUD</h3>
+				<div class="small-muted">Realtime hand-tracking HUD with visual effects</div>
+			</div>
+			<div class="text-end">
+				<div class="hud-badge">Experimental • Live</div>
+				<div class="small-muted mt-1">Powered by MediaPipe</div>
+			</div>
+		</div>// hehe made by shaurya sanyal
+
+		<div class="row g-3">
+			<div class="col-lg-8">// hehe made by shaurya sanyal
+				<div class="video-card card-panel p-3">
+					<div class="d-flex justify-content-between align-items-start mb-2">
+						<div>
+							<strong>Camera Preview</strong>
+							<div class="small-muted">Mirrored view with HUD overlay</div>
+						</div>
+						<div class="text-end">
+							<div>Camera status: <span id="camStatus" class="small-muted"><span class="status-dot status-off" id="camDot"></span> <span id="camText">Idle</span></span></div>
+							<div>FPS: <span id="fps" class="fw-bold">0</span></div>
+						</div>
+					</div>
+
+					<div class="preview-wrap" id="previewWrap">
+						<video id="webcam" playsinline autoplay muted></video>
+						<canvas id="overlay"></canvas>
+					</div>
+
+					<div class="d-flex justify-content-between align-items-center mt-3">
+						<div>
+							<button id="startBtn" class="btn btn-lg btn-primary me-2">Enable Camera</button>
+							<button id="stopBtn" class="btn btn-outline-light btn-lg" disabled>Stop</button>
+						</div>
+						<div class="text-end">
+							<button id="snapBtn" class="btn btn-sm btn-light" title="Save screenshot">📸 Screenshot</button>
+						</div>
+					</div>
+				</div>
+
+				<div class="mt-3 card-panel p-3">
+					<h6 class="mb-2">About</h6>
+					<p class="muted small-muted">This demo overlays a reactive HUD on top of live hand landmarks. Use the controls to tweak model, performance, and visual options. Works best on modern browsers with GPU support.</p>
+				</div>
+			</div>
+
+			<div class="col-lg-4">
+				<div class="card-panel p-3 controls">
+					<h6 class="mb-3">Controls</h6>
+
+					<div class="control-row">
+						<label class="form-label mb-1">Performance mode</label>
+						<select id="modeSelect" class="form-select" title="Performance">
+							<option value="speed" selected>Speed (1 hand, lower res)</option>
+							<option value="quality">Quality (2 hands, higher res)</option>
+						</select>
+					</div>
+
+					<div class="control-row d-flex gap-2">
+						<div style="flex:1">
+							<label class="form-label mb-1">Model</label>
+							<select id="modelSelect" class="form-select">
+								<option value="full" selected>full (accurate)</option>
+								<option value="lite">lite (fast)</option>
+							</select>
+						</div>
+						<div style="width:120px">
+							<label class="form-label mb-1">Max hands</label>
+							<input id="maxHands" type="number" min="1" max="4" value="1" class="form-control" />
+						</div>
+					</div>
+
+					<div class="control-row">
+						<label class="form-label mb-1">Resolution</label>
+						<select id="resSelect" class="form-select">
+							<option value="640x480" selected>640 x 480</option>
+							<option value="960x720">960 x 720</option>
+							<option value="1280x720">1280 x 720</option>
+						</select>
+					</div>
+
+					<div class="control-row">
+						<label class="form-label mb-1">Frame rate target</label>
+						<input id="frameRate" type="range" min="10" max="60" value="30" class="form-range" />
+						<div class="d-flex justify-content-between small-muted"><span>10</span><span id="frameVal">30</span><span>60</span></div>
+					</div>
+
+					<div class="control-row">
+						<label class="form-label mb-1">Visuals</label>
+						<div class="form-check form-switch">
+							<input class="form-check-input" type="checkbox" id="showTrails" checked>
+							<label class="form-check-label small-muted" for="showTrails">Trails</label>
+						</div>
+						<div class="form-check form-switch mt-1">
+							<input class="form-check-input" type="checkbox" id="showParticles" checked>
+							<label class="form-check-label small-muted" for="showParticles">Ambient particles</label>
+						</div>
+					</div>
+
+					<div class="control-row mt-3">
+						<button id="applyBtn" class="btn btn-sm btn-success w-100">Apply & Restart Pipeline</button>
+					</div>
+
+					<hr class="my-3" />
+
+					<div class="small-muted">
+						<div><strong>Logs</strong></div>
+						<pre id="log" style="height:110px; overflow:auto; background:transparent; border:0; white-space:pre-wrap; color:#cfe9ff;"></pre>
+					</div>
+				</div>
+			</div>
+		</div>
+// hehe made by shaurya sanyal
+		<footer class="mt-4 text-center small-muted">
+			<div>Made with care • Demo HUD • Adjust performance for best experience</div>
+		</footer>
+	</div>
+
+	<!-- MediaPipe import kept as module -->
+	<script type="module">
+		import { HandLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
+
+		// DOM// hehe made by shaurya sanyal
+		const video = document.getElementById("webcam");
+		const canvas = document.getElementById("overlay");
+		const ctx = canvas.getContext("2d");
+		const startBtn = document.getElementById("startBtn");
+		const stopBtn = document.getElementById("stopBtn");
+		const snapBtn = document.getElementById("snapBtn");
+		const camText = document.getElementById("camText");
+		const camDot = document.getElementById("camDot");
+		const camStatus = document.getElementById("camStatus");
+		const fpsEl = document.getElementById("fps");
+		const logEl = document.getElementById("log");
+
+		// Controls
+		const modeSelect = document.getElementById("modeSelect");// hehe made by shaurya sanyal
+		const modelSelect = document.getElementById("modelSelect");
+		const maxHandsInput = document.getElementById("maxHands");
+		const resSelect = document.getElementById("resSelect");
+		const frameRateInput = document.getElementById("frameRate");
+		const frameVal = document.getElementById("frameVal");
+		const applyBtn = document.getElementById("applyBtn");
+		const showTrails = document.getElementById("showTrails");
+		const showParticles = document.getElementById("showParticles");
+
+		// state & effects
+		const effects = { particles: [], trails: [], energy: [], sparks: [] };
+		const hudState = { t: 0, lastVideoTime: -1, seed: Math.random() };// hehe made by shaurya sanyal
+		let MAX_HANDS = 1;
+		let MODEL_VARIANT = "full";
+		let VIDEO_WIDTH = 640;
+		let VIDEO_HEIGHT = 480;
+		let FRAME_RATE = 30;
+		let handLandmarker = null;// hehe made by shaurya sanyal
+		let fpsHistory = [];
+		let lastFrameTs = 0;
+		let effectsEnabled = { trails: true, particles: true };
+
+		// initialize UI values
+		frameVal.textContent = frameRateInput.value;
+		frameRateInput.addEventListener("input", () => frameVal.textContent = frameRateInput.value);
+
+		function log(msg) {
+			const t = new Date().toLocaleTimeString();
+			logEl.textContent = "[" + t + "] " + msg + "\n" + logEl.textContent;// hehe made by shaurya sanyal
+		}
+
+		async function createDetector() {
+			log("Loading model...");
+			const filesetResolver = await FilesetResolver.forVisionTasks(// hehe made by shaurya sanyal
+				"https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+			);
+			const modelUrl = MODEL_VARIANT === "lite"
+				? "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker_lite/float16/1/hand_landmarker_lite.task"
+				: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+			handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
+				baseOptions: {
+					modelAssetPath: modelUrl,
+					delegate: "GPU",
+				},
+				numHands: MAX_HANDS,
+				runningMode: "VIDEO",
+			});
+			log("Model loaded: " + MODEL_VARIANT + " (max hands: " + MAX_HANDS + ")");
+		}
+
+		function setCamStatus(on, text) {// hehe made by shaurya sanyal
+			camDot.className = "status-dot " + (on ? "status-on" : "status-off");
+			camText.textContent = text || (on ? "Active" : "Idle");
+		}
+
+		function resize() {
+			const { videoWidth, videoHeight } = video;
+			if (!videoWidth || !videoHeight) return;
+			const dpr = Math.min(window.devicePixelRatio || 1, 2);
+			canvas.width = Math.floor(videoWidth * dpr);
+			canvas.height = Math.floor(videoHeight * dpr);
+			canvas.style.width = videoWidth + "px";
+			canvas.style.height = videoHeight + "px";
+			ctx.setTransform(1, 0, 0, 1, 0, 0);
+			ctx.scale(dpr, dpr);
+		}
+
+		async function enableCamera() {
+			try {
+				await createDetector();
+			} catch (e) {
+				log("Failed to create detector: " + e.message);// hehe made by shaurya sanyal
+				startBtn.disabled = false;
+				return;
+			}
+
+			try {
+				const constraints = {
+					video: {
+						facingMode: "user",
+						width: { ideal: VIDEO_WIDTH },
+						height: { ideal: VIDEO_HEIGHT },
+						frameRate: { ideal: FRAME_RATE, max: FRAME_RATE }
+					},
+					audio: false
+				};
+				const stream = await navigator.mediaDevices.getUserMedia(constraints);
+				video.srcObject = stream;// hehe made by shaurya sanyal
+				await video.play();
+				resize();
+				setCamStatus(true, "Active");
+				stopBtn.disabled = false;
+				startBtn.disabled = true;
+				requestAnimationFrame(loop);
+				log("Camera enabled");
+			} catch (err) {
+				console.error(err);
+				log("Camera error: " + (err.message || err));
+				setCamStatus(false, "Error");
+				startBtn.disabled = false;
+			}
+		}
+
+		async function stopStream() {
+			const s = video.srcObject;
+			if (s && s.getTracks) s.getTracks().forEach(tr => tr.stop());
+			video.srcObject = null;
+			setCamStatus(false, "Idle");
+			stopBtn.disabled = true;
+			startBtn.disabled = false;
+			try { handLandmarker && handLandmarker.close && handLandmarker.close(); } catch(e){}
+			handLandmarker = null;
+			log("Camera stopped");
+		}// hehe made by shaurya sanyal
+
+		startBtn.addEventListener("click", () => {
+			startBtn.disabled = true;
+			enableCamera().catch((err) => {
+				console.error(err);
+				startBtn.disabled = false;
+			});
+		});
+
+		stopBtn.addEventListener("click", stopStream);
+
+		snapBtn.addEventListener("click", () => {
+			if (!video || !canvas) return;
+			// create a combined image
+			const w = video.videoWidth || VIDEO_WIDTH;
+			const h = video.videoHeight || VIDEO_HEIGHT;
+			const tmp = document.createElement('canvas');
+			tmp.width = w;
+			tmp.height = h;
+			const tctx = tmp.getContext('2d');
+			tctx.drawImage(video, 0, 0, w, h);// hehe made by shaurya sanyal
+			tctx.drawImage(canvas, 0, 0, w, h);
+			const url = tmp.toDataURL('image/png');
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'hud-snapshot.png';
+			a.click();
+			log("Screenshot saved");
+		});
+
+		applyBtn.addEventListener("click", async () => {
+			MODEL_VARIANT = modelSelect.value;// hehe made by shaurya sanyal
+			MAX_HANDS = Math.max(1, Math.min(4, parseInt(maxHandsInput.value || 1)));
+			const res = resSelect.value.split('x').map(n => parseInt(n, 10));
+			VIDEO_WIDTH = res[0] || 640;
+			VIDEO_HEIGHT = res[1] || 480;
+			FRAME_RATE = parseInt(frameRateInput.value || 30);
+			effectsEnabled.trails = showTrails.checked;
+			effectsEnabled.particles = showParticles.checked;
+
+			log(`Applying: model=${MODEL_VARIANT}, hands=${MAX_HANDS}, res=${VIDEO_WIDTH}x${VIDEO_HEIGHT}, fps=${FRAME_RATE}`);
+			// restart pipeline if running
+			if (startBtn.disabled) {
+				await stopStream();
+				await enableCamera();
+			}
+		});
+
+		// Hand drawing utils and HUD (kept / improved from original)
+		const HAND_CONNECTIONS = [
+			[0,1],[1,2],[2,3],[3,4],
+			[0,5],[5,6],[6,7],[7,8],
+			[0,9],[9,10],[10,11],[11,12],
+			[0,13],[13,14],[14,15],[15,16],
+			[0,17],[17,18],[18,19],[19,20],
+			[5,9],[9,13],[13,17],[17,5]
+		];
+
+		function toPx([x,y]) {
+			return [x * video.videoWidth, y * video.videoHeight];
+		}
+
+		function drawHUDBase() {
+			const gridX = 24, gridY = video.videoHeight - 120;
+			ctx.save();
+			ctx.translate(gridX, gridY);
+			ctx.strokeStyle = "#6178ff";
+			ctx.lineWidth = 1.5;
+			ctx.shadowColor = "rgba(97,120,255,0.6)";
+			ctx.shadowBlur = 6;
+			for (let i = 0; i <= 6; i++) {
+				ctx.beginPath();
+				ctx.moveTo(0, i * 12);
+				ctx.lineTo(72, i * 12);
+				ctx.stroke();
+			}
+			for (let i = 0; i <= 6; i++) {
+				ctx.beginPath();
+				ctx.moveTo(i * 12, 0);
+				ctx.lineTo(i * 12 + 24, -24);
+				ctx.stroke();
+			}
+			ctx.strokeStyle = "#ff6a3d";// hehe made by shaurya sanyal
+			ctx.beginPath();
+			ctx.rect(96, -72, 60, 60);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.rect(114, -90, 60, 60);
+			ctx.stroke();
+			ctx.beginPath();
+			ctx.moveTo(96, -72); ctx.lineTo(114, -90);
+			ctx.moveTo(156, -72); ctx.lineTo(174, -90);
+			ctx.moveTo(156, -12); ctx.lineTo(174, -30);
+			ctx.moveTo(96, -12); ctx.lineTo(114, -30);
+			ctx.stroke();
+			ctx.restore();
+		}// hehe made by shaurya sanyal
+// hehe made by shaurya sanyal
+		function drawRing(x, y, r, rotation, color) {
+			ctx.save();
+			ctx.translate(x, y);
+			ctx.rotate(rotation);
+			ctx.strokeStyle = color;
+			ctx.lineWidth = 2;
+			ctx.lineCap = "round";
+			ctx.shadowColor = "rgba(255,255,255,0.7)";
+			ctx.shadowBlur = 4;
+			for (let i = 0; i < 3; i++) {
+				ctx.beginPath();
+				ctx.arc(0, 0, r + i * 4, 0.8 * Math.PI, 1.6 * Math.PI);
+				ctx.stroke();
+			}
+			for (let i = 0; i < 8; i++) {
+				const a = (i / 8) * Math.PI * 2;
+				ctx.beginPath();
+				ctx.moveTo(Math.cos(a) * (r + 6), Math.sin(a) * (r + 6));
+				ctx.lineTo(Math.cos(a) * (r + 12), Math.sin(a) * (r + 12));
+				ctx.stroke();
+			}
+			ctx.restore();
+		}
+
+		function drawFingertipGizmo(x, y, t) {
+			drawRing(x, y, 10, t * 0.04, "#ffffff");
+			ctx.fillStyle = "#fff";
+			ctx.beginPath();
+			ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+			ctx.fill();
+		}
+
+		function centroid(points) {
+			let sx = 0, sy = 0;
+			for (const p of points) { sx += p[0]; sy += p[1]; }
+			return [sx / points.length, sy / points.length];
+		}
+
+		function drawPalmHUD(landmarks, t) {
+			const mcpIndices = [0,5,9,13,17];
+			const pts = mcpIndices.map(i => toPx([landmarks[i].x, landmarks[i].y]));
+			const [cx,cy] = centroid(pts);
+			drawRing(cx, cy, 22, t * 0.03, "#ffffff");
+			ctx.strokeStyle = "#ffffff";
+			ctx.lineWidth = 1.5;
+			ctx.lineCap = "round";
+			ctx.shadowColor = "rgba(255,255,255,0.6)";
+			ctx.shadowBlur = 4;
+			ctx.beginPath();
+			for (let i = 0; i < pts.length; i++) {
+				const [x,y] = pts[i];
+				ctx.moveTo(cx, cy);
+				ctx.lineTo(x, y);
+			}
+			ctx.stroke();
+			ctx.font = "14px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace";
+			ctx.fillStyle = "#ffffff";
+			ctx.fillText(`rotation ${Math.floor((t % 360))}`, cx - 40, cy + 48);
+		}
+
+		function drawSkeleton(landmarks) {
+			ctx.strokeStyle = "#ffffff";
+			ctx.lineWidth = 2;
+			ctx.lineCap = "round";
+			ctx.shadowColor = "rgba(255,255,255,0.6)";
+			ctx.shadowBlur = 6;
+			ctx.beginPath();
+			for (const [a,b] of HAND_CONNECTIONS) {
+				const pa = toPx([landmarks[a].x, landmarks[a].y]);
+				const pb = toPx([landmarks[b].x, landmarks[b].y]);
+				ctx.moveTo(pa[0], pa[1]);
+				ctx.lineTo(pb[0], pb[1]);
+				if (effectsEnabled.trails) {
+					effects.trails.push({ x: pa[0], y: pa[1], life: 30, alpha: 0.8 });
+				}
+			}
+			ctx.stroke();
+		}
+
+		function drawJointDots(landmarks, t) {
+			ctx.fillStyle = "#ffffff";
+			ctx.shadowColor = "rgba(255,255,255,0.85)";
+			ctx.shadowBlur = 8;
+			for (let i=0;i<landmarks.length;i++){
+				const [x,y] = toPx([landmarks[i].x, landmarks[i].y]);
+				const r = (i % 4 === 0 || i === 0) ? 2.8 : 2.0;
+				ctx.beginPath();
+				ctx.arc(x,y,r,0,Math.PI*2);
+				ctx.fill();
+				if ([4,8,12,16,20,0,5,9,13,17].includes(i)) {
+					drawRing(x,y,8,t*0.05 + i*0.2,"#ffffff");
+					if (Math.random() < 0.3) {
+						effects.energy.push({
+							x: x + (Math.random() - 0.5) * 20,
+							y: y + (Math.random() - 0.5) * 2,
+							vx: (Math.random() - 0.5) * 2,
+							vy: (Math.random() - 0.5) * 2,
+							life: 60,
+							color: `hsl(${200 + Math.random() * 60}, 80%, 70%)`
+						});
+					}
+				}
+			}
+		}
+
+		const prevByHandIndex = new Map();
+		function smoothLandmarks(raw, handIndex) {
+			const alpha = 0.35;// hehe made by shaurya sanyal
+			const prev = prevByHandIndex.get(handIndex) || raw;
+			const smoothed = raw.map((p,i) => ({
+				x: prev[i] ? prev[i].x * (1 - alpha) + p.x * alpha : p.x,
+				y: prev[i] ? prev[i].y * (1 - alpha) + p.y * alpha : p.y,
+				z: p.z
+			}));
+			prevByHandIndex.set(handIndex, smoothed);
+			return smoothed;
+		}
+
+		function updateEffects() {
+			// energy
+			effects.energy = effects.energy.filter(p => {
+				p.x += p.vx; p.y += p.vy; p.life--;
+				return p.life > 0;
+			});
+			// trails
+			effects.trails = effects.trails.filter(t => {
+				t.life--; t.alpha *= 0.95; return t.life > 0 && t.alpha > 0.1;
+			});
+			// ambient particles
+			if (effectsEnabled.particles && Math.random() < 0.06) {
+				effects.particles.push({
+					x: Math.random() * canvas.width,
+					y: Math.random() * canvas.height,
+					vx: (Math.random() - 0.5) * 0.5,
+					vy: (Math.random() - 0.5) * 0.5,
+					life: 120,
+					size: Math.random() * 2 + 1
+				});
+			}
+			effects.particles = effects.particles.filter(p => {
+				p.x += p.vx; p.y += p.vy; p.life--;
+				return p.life > 0 && p.x > 0 && p.x < canvas.width && p.y > 0 && p.y < canvas.height;
+			});
+		}
+
+		function drawEffects() {
+			effects.energy.forEach(p => {
+				ctx.save();
+				ctx.globalAlpha = p.life / 60;
+				ctx.fillStyle = p.color;
+				ctx.shadowColor = p.color;
+				ctx.shadowBlur = 10;
+				ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+				ctx.restore();
+			});
+			effects.trails.forEach(t => {
+				ctx.save();
+				ctx.globalAlpha = t.alpha;
+				ctx.fillStyle = "#00ffff";
+				ctx.shadowColor = "#00ffff";
+				ctx.shadowBlur = 8;
+				ctx.beginPath(); ctx.arc(t.x,t.y,2,0,Math.PI*2); ctx.fill();
+				ctx.restore();
+			});
+			effects.particles.forEach(p => {
+				ctx.save();
+				ctx.globalAlpha = p.life / 120;
+				ctx.fillStyle = "#ffffff";
+				ctx.shadowColor = "#ffffff";
+				ctx.shadowBlur = 4;
+				ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+				ctx.restore();
+			});
+		}
+
+		function computeFPS(ts) {
+			if (!lastFrameTs) lastFrameTs = ts;
+			const delta = ts - lastFrameTs;
+			lastFrameTs = ts;
+			const fps = 1000 / Math.max(delta, 1);
+			fpsHistory.push(fps);
+			if (fpsHistory.length > 10) fpsHistory.shift();
+			const avg = fpsHistory.reduce((a,b)=>a+b,0)/fpsHistory.length;
+			fpsEl.textContent = Math.round(avg);
+		}
+
+		function loop(t) {
+			if (!handLandmarker) {
+				requestAnimationFrame(loop); return;
+			}
+			hudState.t = t * 0.06;
+			if (video.currentTime === hudState.lastVideoTime) {
+				requestAnimationFrame(loop); return;
+			}
+			hudState.lastVideoTime = video.currentTime;
+			resize();
+			computeFPS(t);
+			ctx.clearRect(0,0,canvas.width,canvas.height);
+			drawHUDBase();
+			updateEffects();
+			drawEffects();
+
+			try {
+				const result = handLandmarker.detectForVideo(video, performance.now());
+				const hands = result.landmarks || [];
+				for (let hi = 0; hi < hands.length; hi++) {
+					const hand = smoothLandmarks(hands[hi], hi);
+					drawSkeleton(hand);
+					drawPalmHUD(hand, hudState.t);
+					drawJointDots(hand, hudState.t);
+					[4,8,12,16,20].forEach(i => {
+						const [x,y] = toPx([hand[i].x, hand[i].y]);
+						drawFingertipGizmo(x,y,hudState.t);
+					});
+				}// hehe made by shaurya sanyal
+			} catch (e) {
+				// detection error (dont spam console)
+				// log("Detect error: " + e.message);
+			}
+
+			requestAnimationFrame(loop);
+		}
+
+		// Resize on window change
+		window.addEventListener("resize", resize);
+
+		// initialize defaults (apply UI -> state)
+		(function initDefaults(){
+			MODEL_VARIANT = modelSelect.value;
+			MAX_HANDS = parseInt(maxHandsInput.value || 1, 10);
+			const res = resSelect.value.split('x').map(n=>parseInt(n,10));
+			VIDEO_WIDTH = res[0];
+			VIDEO_HEIGHT = res[1];
+			FRAME_RATE = parseInt(frameRateInput.value || 30, 10);
+			effectsEnabled.trails = showTrails.checked;
+			effectsEnabled.particles = showParticles.checked;
+		})();
+
+	</script>
+
+	<!-- Bootstrap JS (optional for some components) -->
+	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+// hehe made by shaurya sanyal
