@@ -22,25 +22,34 @@
 			--accent-2:#ff6a3d;
 			--glass: rgba(255,255,255,0.04);
 		}
-		html,body{height:100%; background: radial-gradient(1200px 600px at 10% 10%, rgba(97,120,255,0.06), transparent), radial-gradient(900px 400px at 95% 85%, rgba(255,106,61,0.03), transparent), var(--bg); color:#e6eef8; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
-		.app-container{max-width:1200px; margin:30px auto;}
-		.video-card{background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent); border:1px solid rgba(255,255,255,0.04); border-radius:12px; padding:10px;}
+		html,body{height:100%; background: var(--bg); /* Simplified gradient for mobile */ color:#e6eef8; font-family:Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;}
+		.app-container{max-width:1200px; margin:15px auto;}
+		.video-card{background: var(--panel); border:1px solid rgba(255,255,255,0.04); border-radius:12px; padding:8px;}
 		.preview-wrap{position:relative; width:100%; aspect-ratio:4/3; overflow:hidden; border-radius:8px; background:#000; display:flex; align-items:center; justify-content:center;}
 		video#webcam{width:100%; height:100%; object-fit:cover; transform: scaleX(-1); /* mirror */ display:block;}
 		canvas#overlay{position:absolute; left:0; top:0; transform:scaleX(-1); /* mirror the canvas too */ pointer-events:none; width:100%; height:100%;}
-		.controls .form-select, .controls .btn {border-radius:8px;}
-		.hud-badge{background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#071025; font-weight:600; border-radius:999px; padding:6px 10px; box-shadow:0 6px 18px rgba(97,120,255,0.12);}
+		.controls .form-select, .controls .btn {border-radius:8px; padding:8px; touch-action: manipulation;} /* Touch-friendly */
+		.hud-badge{background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#071025; font-weight:600; border-radius:999px; padding:6px 10px; box-shadow:0 4px 12px rgba(97,120,255,0.1);}
 		.muted{opacity:0.7; font-size:0.9rem;}
-		.card-panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border:1px solid rgba(255,255,255,0.03);}
+		.card-panel{background:var(--panel); border:1px solid rgba(255,255,255,0.03);}
 		footer{opacity:0.6; font-size:0.85rem;}
 		.small-muted{font-size:0.82rem; color:rgba(230,238,248,0.7);}
 		.status-dot{display:inline-block; width:10px; height:10px; border-radius:50%;}
 		.status-on{background: #22c55e;}
 		.status-off{background: #ef4444;}
 		.control-row > * {margin-bottom:8px;}
+		.btn-lg, .btn-sm {min-height: 40px; /* Touch-friendly size */ line-height: 1.5;}
 		/* Responsive tweaks */
 		@media (max-width: 768px){
 			.preview-wrap{aspect-ratio:3/4;}
+			.app-container{margin:10px;}
+			.video-card, .card-panel{padding:6px;}
+			.controls .form-select, .controls .btn{font-size:0.9rem;}
+			.h3{font-size:1.2rem;}
+			.small-muted{font-size:0.75rem;}
+			.control-row{display:flex; flex-direction:column; gap:8px;}
+			.control-row .d-flex{flex-direction:column;}
+			footer{font-size:0.75rem;}
 		}
 	</style>
 </head>
@@ -89,7 +98,7 @@
 
 				<div class="mt-3 card-panel p-3">
 					<h6 class="mb-2">About</h6>
-					<p class="muted small-muted">This demo overlays a reactive HUD on top of live hand landmarks. Use the controls to tweak model, performance, and visual options. Works best on modern browsers with GPU support.</p>
+					<p class="muted small-muted">This demo overlays a reactive HUD on top of live hand landmarks. Use the controls to tweak model, performance, and visual options. Select "Mobile" mode for better performance on phones.</p>
 				</div>
 			</div>
 
@@ -100,6 +109,7 @@
 					<div class="control-row">
 						<label class="form-label mb-1">Performance mode</label>
 						<select id="modeSelect" class="form-select" title="Performance">
+							<option value="mobile">Mobile (lag-free, low res)</option>
 							<option value="speed" selected>Speed (1 hand, lower res)</option>
 							<option value="quality">Quality (2 hands, higher res)</option>
 						</select>
@@ -122,6 +132,7 @@
 					<div class="control-row">
 						<label class="form-label mb-1">Resolution</label>
 						<select id="resSelect" class="form-select">
+							<option value="320x240">320 x 240</option>
 							<option value="640x480" selected>640 x 480</option>
 							<option value="960x720">960 x 720</option>
 							<option value="1280x720">1280 x 720</option>
@@ -200,18 +211,27 @@
 		let VIDEO_WIDTH = 640;
 		let VIDEO_HEIGHT = 480;
 		let FRAME_RATE = 30;
+		let DELEGATE = "GPU"; // Added for mobile CPU fallback
 		let handLandmarker = null; // hehe made by shaurya sanyal
 		let fpsHistory = [];
 		let lastFrameTs = 0;
-		let effectsEnabled = { trails: true, particles: true };
-		let lastFrameTime = 0; // Added for frame rate control
-		const MAX_LOG_ENTRIES = 20; // Limit log entries
-		const MAX_EFFECTS = { trails: 500, particles: 100, energy: 200 }; // Cap effects
+		let effectsEnabled = { trails: true, particles: true, shadows: true }; // Added shadows control
+		let lastFrameTime = 0;
+		const MAX_LOG_ENTRIES = 20;
+		const MAX_EFFECTS = { trails: 500, particles: 100, energy: 200 }; // Adjusted for mobile
+		const MOBILE_MAX_EFFECTS = { trails: 50, particles: 20, energy: 30 }; // Lower for mobile
+
+		// Detect mobile device
+		const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+		if (isMobile) {
+			modeSelect.value = "mobile"; // Default to mobile mode
+			log("Mobile device detected, defaulting to Mobile mode for better performance");
+		}
 
 		// initialize UI values
 		frameVal.textContent = frameRateInput.value;
 		frameRateInput.addEventListener("input", () => {
-			const val = Math.max(10, Math.min(60, parseInt(frameRateInput.value))); // Validate frame rate
+			const val = Math.max(10, Math.min(60, parseInt(frameRateInput.value)));
 			frameRateInput.value = val;
 			frameVal.textContent = val;
 		});
@@ -219,7 +239,7 @@
 		function log(msg) {
 			const t = new Date().toLocaleTimeString();
 			const entry = `[${t}] ${msg}\n`;
-			const lines = (entry + logEl.textContent).split('\n').slice(0, MAX_LOG_ENTRIES); // Cap logs
+			const lines = (entry + logEl.textContent).split('\n').slice(0, MAX_LOG_ENTRIES);
 			logEl.textContent = lines.join('\n');
 		}
 
@@ -235,12 +255,12 @@
 				handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
 					baseOptions: {
 						modelAssetPath: modelUrl,
-						delegate: "GPU",
+						delegate: DELEGATE, // Use CPU for mobile
 					},
 					numHands: MAX_HANDS,
 					runningMode: "VIDEO",
 				});
-				log("Model loaded: " + MODEL_VARIANT + " (max hands: " + MAX_HANDS + ")");
+				log("Model loaded: " + MODEL_VARIANT + " (max hands: " + MAX_HANDS + ", delegate: " + DELEGATE + ")");
 			} catch (e) {
 				if (attempt < maxAttempts) {
 					log(`Model load failed (attempt ${attempt}/${maxAttempts}): ${e.message}. Retrying...`);
@@ -259,11 +279,10 @@
 		function resize() {
 			const { videoWidth, videoHeight } = video;
 			if (!videoWidth || !videoHeight) {
-				// Retry resize if video dimensions aren't ready
 				setTimeout(resize, 100);
 				return;
 			}
-			const dpr = Math.min(window.devicePixelRatio || 1, 2);
+			const dpr = Math.min(window.devicePixelRatio || 1, 1.5); // Lower DPR for mobile
 			canvas.width = Math.floor(videoWidth * dpr);
 			canvas.height = Math.floor(videoHeight * dpr);
 			canvas.style.width = videoWidth + "px";
@@ -342,7 +361,7 @@
 			effects.trails = [];
 			effects.energy = [];
 			effects.sparks = [];
-			prevByHandIndex.clear(); // Clear smoothing cache
+			prevByHandIndex.clear();
 			log("Camera stopped");
 		} // hehe made by shaurya sanyal
 
@@ -353,20 +372,25 @@
 				startBtn.disabled = false;
 			});
 		});
+		startBtn.addEventListener("touchstart", () => {
+			startBtn.click(); // Support touch
+		});
 
 		stopBtn.addEventListener("click", stopStream);
+		stopBtn.addEventListener("touchstart", () => {
+			stopBtn.click();
+		});
 
 		snapBtn.addEventListener("click", () => {
 			if (!video || !canvas) return;
-			// create a combined image
-			const dpr = Math.min(window.devicePixelRatio || 1, 2);
+			const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
 			const w = video.videoWidth || VIDEO_WIDTH;
 			const h = video.videoHeight || VIDEO_HEIGHT;
 			const tmp = document.createElement('canvas');
-			tmp.width = w * dpr; // Account for DPR
+			tmp.width = w * dpr;
 			tmp.height = h * dpr;
 			const tctx = tmp.getContext('2d');
-			tctx.scale(dpr, dpr); // Scale context for DPR
+			tctx.scale(dpr, dpr);
 			tctx.drawImage(video, 0, 0, w, h);
 			tctx.drawImage(canvas, 0, 0, w, h);
 			const url = tmp.toDataURL('image/png');
@@ -376,30 +400,55 @@
 			a.click();
 			log("Screenshot saved");
 		});
+		snapBtn.addEventListener("touchstart", () => {
+			snapBtn.click();
+		});
 
 		applyBtn.addEventListener("click", async () => {
-			// Handle performance mode
 			const mode = modeSelect.value;
-			MODEL_VARIANT = mode === "speed" ? "lite" : "full";
-			modelSelect.value = MODEL_VARIANT; // Sync UI
-			MAX_HANDS = mode === "speed" ? 1 : Math.max(1, Math.min(4, parseInt(maxHandsInput.value || 1)));
-			maxHandsInput.value = MAX_HANDS; // Sync UI
-			const res = resSelect.value.split('x').map(n => parseInt(n, 10));
-			VIDEO_WIDTH = res[0] || 640;
-			VIDEO_HEIGHT = res[1] || 480;
-			FRAME_RATE = Math.max(10, Math.min(60, parseInt(frameRateInput.value || 30))); // Validate
-			effectsEnabled.trails = showTrails.checked;
-			effectsEnabled.particles = showParticles.checked;
+			if (mode === "mobile") {
+				MODEL_VARIANT = "lite";
+				MAX_HANDS = 1;
+				VIDEO_WIDTH = 320;
+				VIDEO_HEIGHT = 240;
+				FRAME_RATE = 20;
+				DELEGATE = "CPU"; // CPU fallback for mobile
+				effectsEnabled.trails = false;
+				effectsEnabled.particles = false;
+				effectsEnabled.shadows = false; // Disable shadows
+				resSelect.value = "320x240";
+				modelSelect.value = "lite";
+				maxHandsInput.value = "1";
+				frameRateInput.value = "20";
+				frameVal.textContent = "20";
+				showTrails.checked = false;
+				showParticles.checked = false;
+			} else {
+				MODEL_VARIANT = mode === "speed" ? "lite" : "full";
+				MAX_HANDS = mode === "speed" ? 1 : Math.max(1, Math.min(4, parseInt(maxHandsInput.value || 1)));
+				const res = resSelect.value.split('x').map(n => parseInt(n, 10));
+				VIDEO_WIDTH = res[0] || 640;
+				VIDEO_HEIGHT = res[1] || 480;
+				FRAME_RATE = Math.max(10, Math.min(60, parseInt(frameRateInput.value || 30)));
+				DELEGATE = "GPU";
+				effectsEnabled.trails = showTrails.checked;
+				effectsEnabled.particles = showParticles.checked;
+				effectsEnabled.shadows = true;
+				modelSelect.value = MODEL_VARIANT;
+				maxHandsInput.value = MAX_HANDS;
+			}
 
-			log(`Applying: model=${MODEL_VARIANT}, hands=${MAX_HANDS}, res=${VIDEO_WIDTH}x${VIDEO_HEIGHT}, fps=${FRAME_RATE}`);
-			// restart pipeline if running
+			log(`Applying: model=${MODEL_VARIANT}, hands=${MAX_HANDS}, res=${VIDEO_WIDTH}x${VIDEO_HEIGHT}, fps=${FRAME_RATE}, delegate=${DELEGATE}`);
 			if (startBtn.disabled) {
 				await stopStream();
 				await enableCamera();
 			}
 		});
+		applyBtn.addEventListener("touchstart", () => {
+			applyBtn.click();
+		});
 
-		// Hand drawing utils and HUD (kept / improved from original)
+		// Hand drawing utils and HUD
 		const HAND_CONNECTIONS = [
 			[0,1],[1,2],[2,3],[3,4],
 			[0,5],[5,6],[6,7],[7,8],
@@ -419,8 +468,10 @@
 			ctx.translate(gridX, gridY);
 			ctx.strokeStyle = "#6178ff";
 			ctx.lineWidth = 1.5;
-			ctx.shadowColor = "rgba(97,120,255,0.6)";
-			ctx.shadowBlur = 6;
+			if (effectsEnabled.shadows) {
+				ctx.shadowColor = "rgba(97,120,255,0.6)";
+				ctx.shadowBlur = 6;
+			}
 			for (let i = 0; i <= 6; i++) {
 				ctx.beginPath();
 				ctx.moveTo(0, i * 12);
@@ -456,8 +507,10 @@
 			ctx.strokeStyle = color;
 			ctx.lineWidth = 2;
 			ctx.lineCap = "round";
-			ctx.shadowColor = "rgba(255,255,255,0.7)";
-			ctx.shadowBlur = 4;
+			if (effectsEnabled.shadows) {
+				ctx.shadowColor = "rgba(255,255,255,0.7)";
+				ctx.shadowBlur = 4;
+			}
 			for (let i = 0; i < 3; i++) {
 				ctx.beginPath();
 				ctx.arc(0, 0, r + i * 4, 0.8 * Math.PI, 1.6 * Math.PI);
@@ -495,8 +548,10 @@
 			ctx.strokeStyle = "#ffffff";
 			ctx.lineWidth = 1.5;
 			ctx.lineCap = "round";
-			ctx.shadowColor = "rgba(255,255,255,0.6)";
-			ctx.shadowBlur = 4;
+			if (effectsEnabled.shadows) {
+				ctx.shadowColor = "rgba(255,255,255,0.6)";
+				ctx.shadowBlur = 4;
+			}
 			ctx.beginPath();
 			for (let i = 0; i < pts.length; i++) {
 				const [x,y] = pts[i];
@@ -513,15 +568,18 @@
 			ctx.strokeStyle = "#ffffff";
 			ctx.lineWidth = 2;
 			ctx.lineCap = "round";
-			ctx.shadowColor = "rgba(255,255,255,0.6)";
-			ctx.shadowBlur = 6;
+			if (effectsEnabled.shadows) {
+				ctx.shadowColor = "rgba(255,255,255,0.6)";
+				ctx.shadowBlur = 6;
+			}
 			ctx.beginPath();
+			const maxEffects = modeSelect.value === "mobile" ? MOBILE_MAX_EFFECTS : MAX_EFFECTS;
 			for (const [a,b] of HAND_CONNECTIONS) {
 				const pa = toPx([landmarks[a].x, landmarks[a].y]);
 				const pb = toPx([landmarks[b].x, landmarks[b].y]);
 				ctx.moveTo(pa[0], pa[1]);
 				ctx.lineTo(pb[0], pb[1]);
-				if (effectsEnabled.trails && effects.trails.length < MAX_EFFECTS.trails) {
+				if (effectsEnabled.trails && effects.trails.length < maxEffects.trails) {
 					effects.trails.push({ x: pa[0], y: pa[1], life: 30, alpha: 0.8 });
 				}
 			}
@@ -530,8 +588,11 @@
 
 		function drawJointDots(landmarks, t) {
 			ctx.fillStyle = "#ffffff";
-			ctx.shadowColor = "rgba(255,255,255,0.85)";
-			ctx.shadowBlur = 8;
+			if (effectsEnabled.shadows) {
+				ctx.shadowColor = "rgba(255,255,255,0.85)";
+				ctx.shadowBlur = 8;
+			}
+			const maxEffects = modeSelect.value === "mobile" ? MOBILE_MAX_EFFECTS : MAX_EFFECTS;
 			for (let i=0;i<landmarks.length;i++){
 				const [x,y] = toPx([landmarks[i].x, landmarks[i].y]);
 				const r = (i % 4 === 0 || i === 0) ? 2.8 : 2.0;
@@ -540,7 +601,7 @@
 				ctx.fill();
 				if ([4,8,12,16,20,0,5,9,13,17].includes(i)) {
 					drawRing(x,y,8,t*0.05 + i*0.2,"#ffffff");
-					if (Math.random() < 0.3 && effects.energy.length < MAX_EFFECTS.energy) {
+					if (Math.random() < 0.3 && effects.energy.length < maxEffects.energy) {
 						effects.energy.push({
 							x: x + (Math.random() - 0.5) * 20,
 							y: y + (Math.random() - 0.5) * 2,
@@ -556,7 +617,7 @@
 
 		const prevByHandIndex = new Map();
 		function smoothLandmarks(raw, handIndex) {
-			const alpha = 0.35; // hehe made by shaurya sanyal
+			const alpha = modeSelect.value === "mobile" ? 0.5 : 0.35; // Smoother for mobile
 			const prev = prevByHandIndex.get(handIndex) || raw;
 			const smoothed = raw.map((p,i) => ({
 				x: prev[i] ? prev[i].x * (1 - alpha) + p.x * alpha : p.x,
@@ -568,17 +629,15 @@
 		}
 
 		function updateEffects() {
-			// energy
+			const maxEffects = modeSelect.value === "mobile" ? MOBILE_MAX_EFFECTS : MAX_EFFECTS;
 			effects.energy = effects.energy.filter(p => {
 				p.x += p.vx; p.y += p.vy; p.life--;
 				return p.life > 0;
-			}).slice(0, MAX_EFFECTS.energy);
-			// trails
+			}).slice(0, maxEffects.energy);
 			effects.trails = effects.trails.filter(t => {
 				t.life--; t.alpha *= 0.95; return t.life > 0 && t.alpha > 0.1;
-			}).slice(0, MAX_EFFECTS.trails);
-			// ambient particles
-			if (effectsEnabled.particles && Math.random() < 0.06 && effects.particles.length < MAX_EFFECTS.particles) {
+			}).slice(0, maxEffects.trails);
+			if (effectsEnabled.particles && Math.random() < 0.06 && effects.particles.length < maxEffects.particles) {
 				effects.particles.push({
 					x: Math.random() * canvas.width,
 					y: Math.random() * canvas.height,
@@ -591,16 +650,19 @@
 			effects.particles = effects.particles.filter(p => {
 				p.x += p.vx; p.y += p.vy; p.life--;
 				return p.life > 0 && p.x > 0 && p.x < canvas.width && p.y > 0 && p.y < canvas.height;
-			}).slice(0, MAX_EFFECTS.particles);
+			}).slice(0, maxEffects.particles);
 		}
 
 		function drawEffects() {
+			const maxEffects = modeSelect.value === "mobile" ? MOBILE_MAX_EFFECTS : MAX_EFFECTS;
 			effects.energy.forEach(p => {
 				ctx.save();
 				ctx.globalAlpha = p.life / 60;
 				ctx.fillStyle = p.color;
-				ctx.shadowColor = p.color;
-				ctx.shadowBlur = 10;
+				if (effectsEnabled.shadows) {
+					ctx.shadowColor = p.color;
+					ctx.shadowBlur = 10;
+				}
 				ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
 				ctx.restore();
 			});
@@ -608,8 +670,10 @@
 				ctx.save();
 				ctx.globalAlpha = t.alpha;
 				ctx.fillStyle = "#00ffff";
-				ctx.shadowColor = "#00ffff";
-				ctx.shadowBlur = 8;
+				if (effectsEnabled.shadows) {
+					ctx.shadowColor = "#00ffff";
+					ctx.shadowBlur = 8;
+				}
 				ctx.beginPath(); ctx.arc(t.x,t.y,2,0,Math.PI*2); ctx.fill();
 				ctx.restore();
 			});
@@ -617,8 +681,10 @@
 				ctx.save();
 				ctx.globalAlpha = p.life / 120;
 				ctx.fillStyle = "#ffffff";
-				ctx.shadowColor = "#ffffff";
-				ctx.shadowBlur = 4;
+				if (effectsEnabled.shadows) {
+					ctx.shadowColor = "#ffffff";
+					ctx.shadowBlur = 4;
+				}
 				ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
 				ctx.restore();
 			});
@@ -640,7 +706,6 @@
 				requestAnimationFrame(loop);
 				return;
 			}
-			// Enforce frame rate
 			const frameInterval = 1000 / FRAME_RATE;
 			if (t - lastFrameTime < frameInterval) {
 				requestAnimationFrame(loop);
@@ -684,24 +749,45 @@
 		// Resize on window change
 		window.addEventListener("resize", resize);
 
-		// initialize defaults (apply UI -> state)
+		// Initialize defaults
 		(function initDefaults(){
-			const mode = modeSelect.value;
-			MODEL_VARIANT = mode === "speed" ? "lite" : "full";
-			modelSelect.value = MODEL_VARIANT;
-			MAX_HANDS = mode === "speed" ? 1 : parseInt(maxHandsInput.value || 1, 10);
-			maxHandsInput.value = MAX_HANDS;
-			const res = resSelect.value.split('x').map(n=>parseInt(n,10));
-			VIDEO_WIDTH = res[0];
-			VIDEO_HEIGHT = res[1];
-			FRAME_RATE = Math.max(10, Math.min(60, parseInt(frameRateInput.value || 30, 10)));
-			effectsEnabled.trails = showTrails.checked;
-			effectsEnabled.particles = showParticles.checked;
+			const mode = isMobile ? "mobile" : modeSelect.value;
+			modeSelect.value = mode;
+			if (mode === "mobile") {
+				MODEL_VARIANT = "lite";
+				MAX_HANDS = 1;
+				VIDEO_WIDTH = 320;
+				VIDEO_HEIGHT = 240;
+				FRAME_RATE = 20;
+				DELEGATE = "CPU";
+				effectsEnabled.trails = false;
+				effectsEnabled.particles = false;
+				effectsEnabled.shadows = false;
+				resSelect.value = "320x240";
+				modelSelect.value = "lite";
+				maxHandsInput.value = "1";
+				frameRateInput.value = "20";
+				frameVal.textContent = "20";
+				showTrails.checked = false;
+				showParticles.checked = false;
+			} else {
+				MODEL_VARIANT = mode === "speed" ? "lite" : "full";
+				MAX_HANDS = mode === "speed" ? 1 : parseInt(maxHandsInput.value || 1, 10);
+				const res = resSelect.value.split('x').map(n=>parseInt(n,10));
+				VIDEO_WIDTH = res[0];
+				VIDEO_HEIGHT = res[1];
+				FRAME_RATE = Math.max(10, Math.min(60, parseInt(frameRateInput.value || 30, 10)));
+				DELEGATE = "GPU";
+				effectsEnabled.trails = showTrails.checked;
+				effectsEnabled.particles = showParticles.checked;
+				effectsEnabled.shadows = true;
+				modelSelect.value = MODEL_VARIANT;
+				maxHandsInput.value = MAX_HANDS;
+			}
 		})();
-
 	</script>
 
-	<!-- Bootstrap JS (optional for some components) -->
+	<!-- Bootstrap JS -->
 	<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
